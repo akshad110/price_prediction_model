@@ -1,0 +1,16 @@
+# Render Blueprint: connect this repo in Render → New → Blueprint
+# If your Git repo root is the parent folder, set "Root Directory" to Price_prediction
+# in the dashboard instead of using a nested path here.
+
+services:
+  - type: web
+    name: insurance-premium-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      # Comma-separated frontend URLs, e.g. https://myapp.vercel.app,http://localhost:3000
+      # Use * only for quick tests (not ideal for production).
+      - key: CORS_ORIGINS
+        value: "*"
