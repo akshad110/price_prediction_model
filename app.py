@@ -1,11 +1,34 @@
 import os
 
+import joblib
+import pandas as pd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pandas as pd
-import joblib
+
+from micro_pricing import compute_risk_only
 
 app = Flask(__name__)
+
+_BASE = os.path.dirname(os.path.abspath(__file__))
+_bundle = joblib.load(os.path.join(_BASE, "premium_model.pkl"))
+_model = _bundle["model"]
+
+
+def _premium_from_model(rainfall: float, aqi: float, area_risk: int, past_disruptions: int) -> str:
+    sample = pd.DataFrame(
+        [
+            {
+                "Rainfall": rainfall,
+                "AQI": aqi,
+                "Area_Risk": area_risk,
+                "Past_Disruptions": past_disruptions,
+            }
+        ]
+    )
+    raw = float(_model.predict(sample)[0])
+    rounded = int(round(raw))
+    rounded = max(20, min(70, rounded))
+    return f"₹{rounded}"
 
 _cors = os.environ.get("CORS_ORIGINS", "*").strip()
 if _cors == "*":
@@ -13,15 +36,11 @@ if _cors == "*":
 else:
     CORS(app, origins=[o.strip() for o in _cors.split(",") if o.strip()])
 
-_BASE = os.path.dirname(os.path.abspath(__file__))
-bundle = joblib.load(os.path.join(_BASE, "premium_model.pkl"))
-model = bundle["model"]
-
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
-        "message" : "Insurance Premium Prediction API",
-        "status"  : "running"
+        "message": "Weekly micro-insurance premium API",
+        "status": "running",
     })
 
 @app.route("/predict-price", methods=["POST"])
@@ -33,26 +52,15 @@ def predict():
     if missing:
         return jsonify({"error": "Missing fields", "missing": missing}), 400
 
-    sample = pd.DataFrame([{
-        "Rainfall"        : float(data["Rainfall"]),
-        "AQI"             : float(data["AQI"]),
-        "Area_Risk"       : int(data["Area_Risk"]),
-        "Past_Disruptions": int(data["Past_Disruptions"])
-    }])
+    rainfall = float(data["Rainfall"])
+    aqi = float(data["AQI"])
+    area_risk = int(data["Area_Risk"])
+    past_disruptions = int(data["Past_Disruptions"])
 
-    predicted_premium = model.predict(sample)[0]
+    premium_str = _premium_from_model(rainfall, aqi, area_risk, past_disruptions)
+    risk = compute_risk_only(rainfall, aqi, area_risk)
 
-    if predicted_premium < 4000:
-        risk = "LOW RISK"
-    elif predicted_premium < 8000:
-        risk = "MEDIUM RISK"
-    else:
-        risk = "HIGH RISK"
-
-    return jsonify({
-        "Premium Price" : f"Rs. {predicted_premium:,.2f}",
-        "Risk Level"    : risk
-    })
+    return jsonify({"premium": premium_str, "risk": risk})
 
 @app.route("/health", methods=["GET"])
 def health():

@@ -1,29 +1,29 @@
-import pandas as pd
 import joblib
+import pandas as pd
+
+from micro_pricing import compute_risk_only
 
 bundle = joblib.load("premium_model.pkl")
-model  = bundle["model"]
+model = bundle["model"]
 
-rainfall         = 180
-aqi              = 320
-area_risk        =   4
-past_disruptions =   7
+rainfall = 94
+aqi = 336
+area_risk = 1
+past_disruptions = 0
 
-sample = pd.DataFrame([{
-    "Rainfall"        : rainfall,
-    "AQI"             : aqi,
-    "Area_Risk"       : area_risk,
-    "Past_Disruptions": past_disruptions
-}])
+sample = pd.DataFrame(
+    [
+        {
+            "Rainfall": rainfall,
+            "AQI": aqi,
+            "Area_Risk": area_risk,
+            "Past_Disruptions": past_disruptions,
+        }
+    ]
+)
+raw = float(model.predict(sample)[0])
+premium_val = max(20, min(70, int(round(raw))))
+risk = compute_risk_only(rainfall, aqi, area_risk)
 
-predicted_premium = model.predict(sample)[0]
-
-if predicted_premium < 4000:
-    risk = "LOW RISK"
-elif predicted_premium < 8000:
-    risk = "MEDIUM RISK"
-else:
-    risk = "HIGH RISK"
-
-print(f"Premium Price : Rs. {predicted_premium:,.2f}")
-print(f"Risk Level    : {risk}")
+print("Premium : Rs.", premium_val, "(ML, clamped 20-70)")
+print("Risk    :", risk)
